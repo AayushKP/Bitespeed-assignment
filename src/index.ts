@@ -18,6 +18,7 @@ app.use(
 );
 const port = process.env.PORT || 3000;
 
+//For Quick Testing
 app.get("/", (req: Request, res: Response) => {
   res.send("Server running !");
 });
