@@ -18,6 +18,10 @@ app.use(
 );
 const port = process.env.PORT || 3000;
 
+app.get("/", (req: Request, res: Response) => {
+  res.send("Server running !");
+});
+
 app.post("/identify", async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -41,11 +45,82 @@ app.post("/identify", async (req: Request, res: Response) => {
       orderBy: { createdAt: "asc" },
     });
 
-    res.status(200).json({ contacts });
+    let primaryContact: Contact;
+    let secondaryContactIds: number[] = [];
+    const emailsSet = new Set<string>();
+    const phoneNumbersSet = new Set<string>();
+
+    if (contacts.length === 0) {
+      const newContact = await prisma.contact.create({
+        data: {
+          email: email || null,
+          phoneNumber: phoneNumber || null,
+          linkPrecedence: "primary",
+        },
+      });
+      primaryContact = newContact;
+      if (newContact.email) {
+        emailsSet.add(newContact.email);
+      }
+      if (newContact.phoneNumber) {
+        phoneNumbersSet.add(newContact.phoneNumber);
+      }
+    } else {
+      primaryContact =
+        contacts.find((contact) => contact.linkPrecedence === "primary") ||
+        contacts[0];
+
+      contacts.forEach((contact) => {
+        if (contact.email) {
+          emailsSet.add(contact.email);
+        }
+        if (contact.phoneNumber) {
+          phoneNumbersSet.add(contact.phoneNumber);
+        }
+      });
+
+      secondaryContactIds = contacts
+        .filter((contact) => contact.linkPrecedence === "secondary")
+        .map((contact) => contact.id);
+
+      let needToCreateSecondary = false;
+      if (email && !emailsSet.has(email)) {
+        needToCreateSecondary = true;
+      }
+      if (phoneNumber && !phoneNumbersSet.has(phoneNumber)) {
+        needToCreateSecondary = true;
+      }
+
+      if (needToCreateSecondary) {
+        const newSecondary = await prisma.contact.create({
+          data: {
+            email: email || null,
+            phoneNumber: phoneNumber || null,
+            linkedId: primaryContact.id,
+            linkPrecedence: "secondary",
+          },
+        });
+        secondaryContactIds.push(newSecondary.id);
+        if (newSecondary.email) {
+          emailsSet.add(newSecondary.email);
+        }
+        if (newSecondary.phoneNumber) {
+          phoneNumbersSet.add(newSecondary.phoneNumber);
+        }
+      }
+    }
+
+    const responseContact = {
+      primaryContatctId: primaryContact.id,
+      emails: Array.from(emailsSet),
+      phoneNumbers: Array.from(phoneNumbersSet),
+      secondaryContactIds: secondaryContactIds,
+    };
+
+    res.status(200).json({ contact: responseContact });
   } catch (error) {
-    console.error(error);
+    console.error("Error in /identify endpoint:", error);
     res.status(500).json({ error: "Internal Server Error" });
-    return;
   }
 });
 
