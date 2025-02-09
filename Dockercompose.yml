@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    container_name: bitespeed-backend
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL} 
+    command: ["npm", "run", "dev"]
+
+  db:
+    image: postgres:15
+    container_name: bitespeed-db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bitespeed_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
